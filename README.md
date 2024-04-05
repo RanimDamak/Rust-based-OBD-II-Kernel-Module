@@ -443,3 +443,25 @@ impl Obd2Frame {
 
 ```
 
+
+3. Testing:
+
+pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
+    let mut serialized_frame = [0u8; MAX_FRAME_SIZE];
+    let mut index = 0;
+
+    // Serialize length, mode, and pid
+    for &value in &[self.length, self.mode, self.pid] {
+        serialized_frame[index] = value;
+        index += 1;
+    }
+
+    // Serialize data
+    for &byte in &self.data {
+        serialized_frame[index] = byte;
+        index += 1;
+    }
+
+    serialized_frame
+}
+
