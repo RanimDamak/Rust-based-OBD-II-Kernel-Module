@@ -461,17 +461,23 @@ pub fn serialize(&self) -> CString {
         
     }
 ```
-errors:
-error[E0599]: no method named `try_push` found for struct `CString` in the current scope
-   --> samples/rust/rust_scull_test.rs:254:30
-    |
-254 |             serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", value))).unwrap();
-    |                              ^^^^^^^^ method not found in `CString`
+V2.0:
+```
+pub fn serialize(&self) -> CString {
+    let mut serialized_frame = CString::new("").unwrap();
 
-error[E0599]: no method named `try_push` found for struct `CString` in the current scope
-   --> samples/rust/rust_scull_test.rs:259:30
-    |
-259 |             serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", byte))).unwrap();
-    |                              ^^^^^^^^ method not found in `CString`
+    // Serialize length, mode, and pid
+    for &value in &[self.length, self.mode, self.pid] {
+        serialized_frame = CString::new(format!("{}{:02x}", serialized_frame.to_str().unwrap(), value)).unwrap();
+    }
 
-error: aborting due to 2 previous errors
+    // Serialize data
+    for &byte in &self.data {
+        serialized_frame = CString::new(format!("{}{:02x}", serialized_frame.to_str().unwrap(), byte)).unwrap();
+    }
+
+    serialized_frame
+}
+
+
+```
