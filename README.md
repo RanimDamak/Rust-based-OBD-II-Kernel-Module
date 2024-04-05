@@ -31,7 +31,6 @@ impl ObdFrame {
         
     }
     
-
     fn get_length(&self) -> u8 {
         self.length
     }
@@ -49,13 +48,10 @@ impl ObdFrame {
         &self.data[..]
     }
 
-
     pub fn get_speed(&self) -> u16 {
 
         let data = self.get_data();
         if data.len() >= 1 {
-            //let value = data[0];
-            //let decimal_value = u8::from_str_radix(&value.to_string(), 16).unwrap();
             (data[0] * 10) as u16
         } else {
             0
@@ -99,8 +95,6 @@ impl ObdFrame {
         }
     }
 
-
-
     pub fn get_data_dep_pid(&self) -> String {
         match self.get_pid() {
             //Vehicle Speed
@@ -143,8 +137,6 @@ impl ObdFrame {
         serialized_frame
     }
 
-
-
 }
 
 
@@ -167,7 +159,6 @@ fn main() {
     let data_serialized=frame.serialize();
     println!("Serialized Data:{}\n",data_serialized);
 
-
 }
 ```
 
@@ -179,8 +170,6 @@ use kernel::{file, miscdev};
 use kernel::prelude::*;
 use kernel::sync::{Arc, ArcBorrow};
 use kernel::str::CString;
-
-
 
 module! {
     type: Scull,
@@ -226,8 +215,6 @@ impl Device {
 
 }
 
-
-
 #[vtable]
 
 impl file::Operations for Scull{
@@ -271,13 +258,6 @@ impl kernel::Module for Scull {
         Ok(Scull{ _dev: reg })
     }
 }
-
-
-
-
-
-
-
 
 impl Obd2Frame {
 
@@ -328,7 +308,6 @@ impl Obd2Frame {
 
     }
 
-
     fn get_rpm(&self) -> u32 {
         let data = self.get_data();
         if data.len() >= 2 {
@@ -340,9 +319,6 @@ impl Obd2Frame {
             0
         }
     }
-
-   
-
 
     fn get_fuel_system_status(&self) -> &str {
         let data = self.get_data();
@@ -367,10 +343,6 @@ impl Obd2Frame {
             "Invalid fuel system status"
         }
     }
-
-
-
-  
 
     fn get_data_dep_pid(&self) -> CString {
         match self.get_pid() {
@@ -399,22 +371,19 @@ impl Obd2Frame {
         }
     }
 
-    
-    
-
     /*pub fn serialize(&self) -> CString {
-        //let mut serialized_frame = CString::try_from_fmt(fmt!("{:02x}{:02x}{:02x}"),self.length, self.mode, self.pid).unwrap();
-        //let mut output = CString::try_from_fmt(fmt!("{}"));
+        let mut serialized_frame = CString::try_from_fmt(fmt!("{:02x}{:02x}{:02x}"),self.length, self.mode, self.pid).unwrap();
+        let mut output = CString::try_from_fmt(fmt!("{}"));
     
         for &byte in &self.data {
             output.try_push(CString::try_from_fmt(fmt!("{:02x}\n", byte)));
             
         }
         
-        //serialized_frame.from_vec(output).unwrap()
+        serialized_frame.from_vec(output).unwrap()
         //serialized_frame.copy_from_slice(output.as_slice()).unwrap()
-        serialized_frame.clone_from_slice(output);
-        serialized_frame
+        /*serialized_frame.clone_from_slice(output);
+        serialized_frame*/
     }
     
 */
@@ -474,22 +443,35 @@ pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
 
 
 ```
-use kernel::str::CStr;
+pub fn serialize(&self) -> CString {
+       
+        let mut serialized_frame = CString::try_from_fmt(fmt!("")).unwrap();
 
-pub fn serialize(&self) -> CStr {
-    let mut serialized_frame = String::new();
+        // Serialize length, mode, and pid        
+        for value in [self.length, self.mode, self.pid] {
+            serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", value))).unwrap();
+        }
 
-    // Serialize length, mode, and pid
-    for &value in &[self.length, self.mode, self.pid] {
-        serialized_frame.push_str(&format!("{:02x}", value));
+        // Serialize data
+        for &byte in &self.data {
+            serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", byte))).unwrap();
+        }
+
+        serialized_frame
+        
     }
-
-    // Serialize data
-    for &byte in &self.data {
-        serialized_frame.push_str(&format!("{:02x}", byte));
-    }
-
-    // Convert the serialized frame string to a CString
-    CString::try_from(serialized_frame).unwrap()
-}
 ```
+errors:
+error[E0599]: no method named `try_push` found for struct `CString` in the current scope
+   --> samples/rust/rust_scull_test.rs:254:30
+    |
+254 |             serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", value))).unwrap();
+    |                              ^^^^^^^^ method not found in `CString`
+
+error[E0599]: no method named `try_push` found for struct `CString` in the current scope
+   --> samples/rust/rust_scull_test.rs:259:30
+    |
+259 |             serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", byte))).unwrap();
+    |                              ^^^^^^^^ method not found in `CString`
+
+error: aborting due to 2 previous errors
