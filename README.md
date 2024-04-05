@@ -446,6 +446,9 @@ impl Obd2Frame {
 
 3. Testing:
 
+
+```
+
 pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
     let mut serialized_frame = [0u8; MAX_FRAME_SIZE];
     let mut index = 0;
@@ -464,4 +467,7 @@ pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
 
     serialized_frame
 }
+
+
+```
 
