@@ -462,30 +462,39 @@ pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
 ```
 V3.0:
 ```
-use kernel::str::CStr;
-use kernel::ptr;
+pub fn concat_cstrings(cstr1: &CStr, cstr2: &CStr) -> &CStr
+    {
+        // Calculate the length of the concatenated string
+        let len1 = cstr1.as_bytes().len();
+        let len2 = cstr2.as_bytes().len();
 
-pub fn concat_cstrings(cstr1: &CStr, cstr2: &CStr) -> CStr {
-    // Calculate the length of the concatenated string
-    let len1 = cstr1.to_bytes().len();
-    let len2 = cstr2.to_bytes().len();
+        // Allocate a new buffer with enough capacity
+        let mut concat_buffer = Vec::try_with_capacity(len1 + len2);
 
-    // Allocate a new buffer with enough capacity
-    let mut concat_buffer = Vec::with_capacity(len1 + len2);
+        // Copy bytes from the first CString
+        concat_buffer.expect("REASON").try_extend_from_slice(cstr1.as_bytes());
 
-    // Copy bytes from the first CString
-    concat_buffer.extend_from_slice(cstr1.to_bytes());
+        // Copy bytes from the second CString
+        concat_buffer.expect("REASON").try_extend_from_slice(cstr2.as_bytes());
 
-    // Copy bytes from the second CString
-    concat_buffer.extend_from_slice(cstr2.to_bytes());
+        // Convert the buffer to a CString
+        let concat_cstring = unsafe {
+            CStr::from_char_ptr(
+                ptr::read(concat_buffer.expect("REASON").as_ptr() as *const _)
+            )
+        };
 
-    // Convert the buffer to a CString
-    let concat_cstring = unsafe {
-        CStr::from_ptr(
-            ptr::read(concat_buffer.as_ptr() as *const _)
-        )
-    };
-
-    concat_cstring
-}
+        concat_cstring
+    }
 ```
+error:
+error[E0106]: missing lifetime specifier
+   --> samples/rust/rust_scull_test.rs:291:59
+    |
+291 |     pub fn concat_cstrings(cstr1: &CStr, cstr2: &CStr) -> &CStr
+    |                                   -----         -----     ^ expected named lifetime parameter
+    |
+    = help: this function's return type contains a borrowed value, but the signature does not say whether it is borrowed from `cstr1` or `cstr2`
+help: consider introducing a named lifetime parameter
+    |
+291 |     pub fn concat_cstrings<'a>(cstr1: &'a CStr, cstr2: &'a CStr) -> &'a CStr
