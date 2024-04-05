@@ -443,41 +443,31 @@ pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
 
 
 ```
-pub fn serialize(&self) -> CString {
-       
-        let mut serialized_frame = CString::try_from_fmt(fmt!("")).unwrap();
+ pub fn serialize(&self) -> CString {
+        let mut serialized_frame1 = CString::try_from_fmt(fmt!("")).unwrap();
+        let mut serialized_frame2 = CString::try_from_fmt(fmt!("")).unwrap();
 
-        // Serialize length, mode, and pid        
-        for value in [self.length, self.mode, self.pid] {
-            serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", value))).unwrap();
+        // Serialize length, mode, and pid
+        for &value in &[self.length, self.mode, self.pid] {
+            serialized_frame1 = CString::try_from_fmt(fmt!("{:02x}\n", value)).unwrap();
         }
 
         // Serialize data
         for &byte in &self.data {
-            serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", byte))).unwrap();
+            serialized_frame2 = CString::try_from_fmt(fmt!("{:02x}\n", byte)).unwrap();
         }
 
-        serialized_frame
-        
+        [serialized_frame1,serialized_frame2].concat()
     }
 ```
-V2.0:
-```
-pub fn serialize(&self) -> CString {
-    let mut serialized_frame = CString::new("").unwrap();
+error:
 
-    // Serialize length, mode, and pid
-    for &value in &[self.length, self.mode, self.pid] {
-        serialized_frame = CString::new(format!("{}{:02x}", serialized_frame.to_str().unwrap(), value)).unwrap();
-    }
+error[E0599]: the method `concat` exists for array `[CString; 2]`, but its trait bounds were not satisfied
+   --> samples/rust/rust_scull_test.rs:279:47
+    |
+279 |         [serialized_frame1,serialized_frame2].concat()
+    |                                               ^^^^^^ method cannot be called on `[CString; 2]` due to unsatisfied trait bounds
+    |
+    = note: the following trait bounds were not satisfied:
+            `[CString]: alloc::slice::Concat<_>`
 
-    // Serialize data
-    for &byte in &self.data {
-        serialized_frame = CString::new(format!("{}{:02x}", serialized_frame.to_str().unwrap(), byte)).unwrap();
-    }
-
-    serialized_frame
-}
-
-
-```
