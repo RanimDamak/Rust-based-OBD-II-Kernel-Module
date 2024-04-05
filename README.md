@@ -460,14 +460,32 @@ pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
         [serialized_frame1,serialized_frame2].concat()
     }
 ```
-error:
+V3.0:
+```
+use kernel::str::CStr;
+use kernel::ptr;
 
-error[E0599]: the method `concat` exists for array `[CString; 2]`, but its trait bounds were not satisfied
-   --> samples/rust/rust_scull_test.rs:279:47
-    |
-279 |         [serialized_frame1,serialized_frame2].concat()
-    |                                               ^^^^^^ method cannot be called on `[CString; 2]` due to unsatisfied trait bounds
-    |
-    = note: the following trait bounds were not satisfied:
-            `[CString]: alloc::slice::Concat<_>`
+pub fn concat_cstrings(cstr1: &CStr, cstr2: &CStr) -> CStr {
+    // Calculate the length of the concatenated string
+    let len1 = cstr1.to_bytes().len();
+    let len2 = cstr2.to_bytes().len();
 
+    // Allocate a new buffer with enough capacity
+    let mut concat_buffer = Vec::with_capacity(len1 + len2);
+
+    // Copy bytes from the first CString
+    concat_buffer.extend_from_slice(cstr1.to_bytes());
+
+    // Copy bytes from the second CString
+    concat_buffer.extend_from_slice(cstr2.to_bytes());
+
+    // Convert the buffer to a CString
+    let concat_cstring = unsafe {
+        CStr::from_ptr(
+            ptr::read(concat_buffer.as_ptr() as *const _)
+        )
+    };
+
+    concat_cstring
+}
+```
