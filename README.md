@@ -470,4 +470,26 @@ pub fn serialize(&self) -> [u8; MAX_FRAME_SIZE] {
 
 
 ```
+4. Testing2.0:
 
+
+```
+use kernel::str::CStr;
+
+pub fn serialize(&self) -> CStr {
+    let mut serialized_frame = String::new();
+
+    // Serialize length, mode, and pid
+    for &value in &[self.length, self.mode, self.pid] {
+        serialized_frame.push_str(&format!("{:02x}", value));
+    }
+
+    // Serialize data
+    for &byte in &self.data {
+        serialized_frame.push_str(&format!("{:02x}", byte));
+    }
+
+    // Convert the serialized frame string to a CString
+    CString::try_from(serialized_frame).unwrap()
+}
+```
