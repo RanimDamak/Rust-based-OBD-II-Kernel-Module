@@ -165,20 +165,19 @@ fn main() {
 2. RUST IN KERNEL ENVIRONNEMENT
    
 ```
+
 use kernel::io_buffer::{IoBufferReader, IoBufferWriter};
 use kernel::{file, miscdev};
 use kernel::prelude::*;
 use kernel::sync::{Arc, ArcBorrow};
 use kernel::str::CString;
-
-use alloc::format;
-
-use kernel::file::File;
-
-//use kernel::fs;
-
+use alloc::vec::Vec;
 use kernel::str::CStr;
-//use core::ptr;
+
+//use alloc::slice::Concat;
+
+use kernel::file::flags::O_WRONLY;
+
 
 module! {
     type: Scull,
@@ -226,6 +225,7 @@ impl Device {
 
 
 
+
 #[vtable]
 
 impl file::Operations for Scull{
@@ -251,37 +251,38 @@ impl file::Operations for Scull{
     fn write(
         _data: ArcBorrow<'_, Device>,
         _file: &file::File,
-        _reader: &mut impl IoBufferReader,
+        reader: &mut impl IoBufferReader,
         _offset: u64,
     ) -> Result<usize> {
 
-        /*let mut buffer = [0u8; 256];
-        let len = _reader.read()?;
+        // let mut buffer = [0u8; 256];
+        // let len = reader.read(&mut buffer)?;
 
-        if len > 0 {
+        // if len > 0 {
 
-            let data = &buffer[..len];
-            let mut payload = Vec::new();
-            payload.try_extend_from_slice(&[len as u8, 0x01, 0x0D]);
-            payload.try_extend_from_slice(data);
-            let mut file = File::from_fd("/dev/obd")?;
-            let mut file = file.try_clone()?;
-            file.write_all(&payload)?;
+        //     // let data = &buffer[..len];
+        //     // let mut payload = Vec::new();
+        //     // payload.try_extend_from_slice(&[len as u8, 0x01, 0x0D]);
+        //     // payload.try_extend_from_slice(data);
+        //     // file::write_all("/dev/scull_test",&payload)?;
 
-        }*/
+        //     let mut payload = _data.obd2_frame.clone_headers();
+        //     payload.try_extend_from_slice(&buffer[..len]);
+        //     let device_file = &file::File::create(&CString::new("/dev/scull_test").unwrap(), O_WRONLY)?;
+        //     device_file.write_all(&payload)?;
+
+        // }
 
         pr_info!("File was written\n");
-        Ok(_reader.len())
+        Ok(reader.len())
     }
 }
 
 impl kernel::Module for Scull {
     fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
         pr_info!("Hello world!\n");
-      
         let dev = Arc::try_new(Device::new())?;
-
-        let reg = miscdev::Registration::new_pinned(fmt!("scull"), dev)?;
+        let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
         Ok(Scull{ _dev: reg })
     }
 }
@@ -293,9 +294,13 @@ impl kernel::Module for Scull {
 
 
 
+
+
+
+
 impl Obd2Frame {
 
-     fn new_request(
+    fn new_request(
         length: u8,
         mode: u8,
         pid: u8,
@@ -310,6 +315,16 @@ impl Obd2Frame {
             data: data,
         }
         
+    }
+
+    fn clone_headers(&self) -> Vec<u8> {
+
+        let mut payload = Vec::new();
+        payload.try_push(self.length);
+        payload.try_push(self.mode);
+        payload.try_push(self.pid);
+        payload
+
     }
     
 
@@ -334,7 +349,6 @@ impl Obd2Frame {
 
         let data = self.get_data();
         if data.len() >= 1 {
-            //let value = data[0];
             (data[0] * 10) as u16
         } else {
             0
@@ -415,7 +429,7 @@ impl Obd2Frame {
 
 
    
-
+    
    
 
     /*pub fn serialize(&self) -> CString {
@@ -436,51 +450,81 @@ impl Obd2Frame {
     }*/
 
     // pub fn serialize(&self) -> CString {
-    //     let mut serialized_frame = CString::try_from_fmt(fmt!("")).unwrap();
-    //     let mut serialized_frame1 = CString::try_from_fmt(fmt!("")).unwrap();
+        
     //     let mut serialized_frame2 = CString::try_from_fmt(fmt!("")).unwrap();
 
     //     // Serialize length, mode, and pid
-    //     for &value in &[self.length, self.mode, self.pid] {
-    //         serialized_frame1 = CString::try_from_fmt(fmt!("{}{:02x}\n",serialized_frame1, value)).unwrap();
-    //     }
-
+    //     let serialized_frame1 = CString::try_from_fmt(fmt!("{:02x}{:02x}{:02x}",self.length, self.mode, self.pid)).unwrap();
+        
+    //     let serialized_frame2 = serialized_frame1;
     //     // Serialize data
     //     for &byte in &self.data {
-    //         serialized_frame2 = CString::try_from_fmt(fmt!("{}{:02x}\n",serialized_frame2, byte)).unwrap();
+    //         serialized_frame2 = CString::try_from_fmt(fmt!("{}{:02x}",serialized_frame2, byte)).unwrap();
     //     }
 
-    //     serialized_frame = CString::try_from_fmt(fmt!("{}{}\n",serialized_frame1,serialized_frame2)).unwrap();
-    //     serialized_frame
+    //     // let mut serialized_frame = CString::try_from_fmt(fmt!("{}{}\n",serialized_frame1,serialized_frame2)).unwrap();
+    //     serialized_frame2
         
     // }
-
-    pub fn serialize(&self) -> CString {
-        let mut serialized_frame = CString::try_from_fmt(fmt!("")).unwrap();
-        let mut serialized_frame1 = String::new();
-        let mut serialized_frame2 = String::new();
-
-        // Serialize length, mode, and pid
-        for &value in &[self.length, self.mode, self.pid] {
-            serialized_frame1 = ::alloc::format!("{}{:02x}\n",serialized_frame1, value);
-        }
-
-        // Serialize data
-        for &byte in &self.data {
-            serialized_frame2 = ::alloc::format!("{}{:02x}\n",serialized_frame2, byte);
-        }
-
-        serialized_frame = CString::try_from_fmt(fmt!("{}{}\n",serialized_frame1,serialized_frame2)).unwrap();
-        serialized_frame
         
-    }  
+        
+        
+    
+
+    // fn serialize(&self) -> CStr {
+               
+    //     let serialized_frame1 = CStr::from_bytes_with_nul(&[self.length, self.mode, self.pid]).unwrap();
+    //     let serialized_frame2 = CStr::from_bytes_with_nul(&self.data).unwrap();
+    //     let serialized_frame =  [&serialized_frame1,&serialized_frame2].concat_cstr();
+    //     serialized_frame
+    // }
 
 
+    fn concat_cstr<'a>(a: &'a CStr, b: &'a CStr) -> &'a CStr {
+
+        let a_bytes = a.as_bytes();
+        let b_bytes = b.as_bytes();
+        let mut concat_bytes = Vec::try_with_capacity(a_bytes.len() + b_bytes.len() + 1);
+        concat_bytes.expect("REASON").try_extend_from_slice(a_bytes).unwrap();
+        //concat_bytes.expect("REASON").try_push(0);
+        concat_bytes.expect("REASON").try_extend_from_slice(b_bytes).unwrap();
+        CStr::from_bytes_with_nul(&concat_bytes ).unwrap()
+    
+    }
 
 
-            
+    fn serialize(&self) -> &CStr {
+
+        let serialized_frame1 = CStr::from_bytes_with_nul(&[self.length, self.mode, self.pid]).unwrap();
+        let serialized_frame2 = CStr::from_bytes_with_nul(&self.data).unwrap();
+        let serialized_frame = unsafe { CStr::from_bytes_with_nul_unchecked(Obd2Frame::concat_cstr(serialized_frame1,serialized_frame2).as_ref()) };
+        serialized_frame
+    
+    }
     
 
 
+
 }
+
+
+```
+
+3. Error:
+```
+error[E0308]: mismatched types
+   --> samples/rust/rust_scull_test.rs:328:35
+    |
+328 |         CStr::from_bytes_with_nul(&concat_bytes ).unwrap()
+    |         ------------------------- ^^^^^^^^^^^^^ expected `&[u8]`, found `&Result<Vec<u8>, TryReserveError>`
+    |         |
+    |         arguments to this function are incorrect
+    |
+    = note: expected reference `&[u8]`
+               found reference `&core::result::Result<Vec<u8>, TryReserveError>`
+note: associated function defined here
+   --> /home/rdammak@actia.local/src/linux/rust/kernel/str.rs:112:18
+    |
+112 |     pub const fn from_bytes_with_nul(bytes: &[u8]) -> Result<&Self, CStrConvertError> {
+    |                  ^^^^^^^^^^^^^^^^^^^
 ```
