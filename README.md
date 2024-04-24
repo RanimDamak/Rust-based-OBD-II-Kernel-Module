@@ -174,9 +174,7 @@ use kernel::str::CString;
 use alloc::vec::Vec;
 use kernel::str::CStr;
 
-//use alloc::slice::Concat;
-
-use kernel::file::flags::O_WRONLY;
+//use kernel::file::flags::O_WRONLY;
 
 
 module! {
@@ -317,15 +315,15 @@ impl Obd2Frame {
         
     }
 
-    fn clone_headers(&self) -> Vec<u8> {
+    // fn clone_headers(&self) -> Vec<u8> {
 
-        let mut payload = Vec::new();
-        payload.try_push(self.length);
-        payload.try_push(self.mode);
-        payload.try_push(self.pid);
-        payload
+    //     let mut payload = Vec::new();
+    //     payload.try_push(self.length);
+    //     payload.try_push(self.mode);
+    //     payload.try_push(self.pid);
+    //     payload
 
-    }
+    // }
     
 
     fn get_length(&self) -> u8 {
@@ -428,103 +426,28 @@ impl Obd2Frame {
     }
 
 
-   
-    
-   
-
-    /*pub fn serialize(&self) -> CString {
-       
-        let mut serialized_frame = CString::try_from_fmt(fmt!("")).unwrap();
-
-        // Serialize length, mode, and pid        
-        for value in [self.length, self.mode, self.pid] {
-            serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", value)).unwrap());
-        }
-
-        // Serialize data
-        for &byte in &self.data {
-            serialized_frame.try_push(CString::try_from_fmt(fmt!("{:02x}\n", byte)).unwrap());
-        }
-
-        serialized_frame
-    }*/
-
-    // pub fn serialize(&self) -> CString {
-        
-    //     let mut serialized_frame2 = CString::try_from_fmt(fmt!("")).unwrap();
-
-    //     // Serialize length, mode, and pid
-    //     let serialized_frame1 = CString::try_from_fmt(fmt!("{:02x}{:02x}{:02x}",self.length, self.mode, self.pid)).unwrap();
-        
-    //     let serialized_frame2 = serialized_frame1;
-    //     // Serialize data
-    //     for &byte in &self.data {
-    //         serialized_frame2 = CString::try_from_fmt(fmt!("{}{:02x}",serialized_frame2, byte)).unwrap();
-    //     }
-
-    //     // let mut serialized_frame = CString::try_from_fmt(fmt!("{}{}\n",serialized_frame1,serialized_frame2)).unwrap();
-    //     serialized_frame2
-        
-    // }
-        
-        
-        
-    
-
-    // fn serialize(&self) -> CStr {
-               
-    //     let serialized_frame1 = CStr::from_bytes_with_nul(&[self.length, self.mode, self.pid]).unwrap();
-    //     let serialized_frame2 = CStr::from_bytes_with_nul(&self.data).unwrap();
-    //     let serialized_frame =  [&serialized_frame1,&serialized_frame2].concat_cstr();
-    //     serialized_frame
-    // }
-
-
-    fn concat_cstr<'a>(a: &'a CStr, b: &'a CStr) -> &'a CStr {
-
-        let a_bytes = a.as_bytes();
-        let b_bytes = b.as_bytes();
-        let mut concat_bytes = Vec::try_with_capacity(a_bytes.len() + b_bytes.len() + 1);
-        concat_bytes.expect("REASON").try_extend_from_slice(a_bytes).unwrap();
-        //concat_bytes.expect("REASON").try_push(0);
-        concat_bytes.expect("REASON").try_extend_from_slice(b_bytes).unwrap();
-        CStr::from_bytes_with_nul(&concat_bytes ).unwrap()
-    
-    }
 
 
     fn serialize(&self) -> &CStr {
 
-        let serialized_frame1 = CStr::from_bytes_with_nul(&[self.length, self.mode, self.pid]).unwrap();
-        let serialized_frame2 = CStr::from_bytes_with_nul(&self.data).unwrap();
-        let serialized_frame = unsafe { CStr::from_bytes_with_nul_unchecked(Obd2Frame::concat_cstr(serialized_frame1,serialized_frame2).as_ref()) };
+        let binding: [u8; 3] = [self.length, self.mode, self.pid];
+        let a: &[u8] = binding.as_slice();
+        let b: &[u8] = self.data.as_slice();
+
+        let c: &[u8] = {
+
+            let mut v = Vec::try_with_capacity(a.len() + b.len()).unwrap();
+            v.try_extend_from_slice(a).unwrap();       
+            v.try_extend_from_slice(b).unwrap();       
+            Box::leak(v.try_into_boxed_slice().unwrap())
+        };
+
+        let serialized_frame = CStr::from_bytes_with_nul(c).unwrap();
         serialized_frame
     
     }
-    
-
-
 
 }
 
-
 ```
-
-3. Error:
-```
-error[E0308]: mismatched types
-   --> samples/rust/rust_scull_test.rs:328:35
-    |
-328 |         CStr::from_bytes_with_nul(&concat_bytes ).unwrap()
-    |         ------------------------- ^^^^^^^^^^^^^ expected `&[u8]`, found `&Result<Vec<u8>, TryReserveError>`
-    |         |
-    |         arguments to this function are incorrect
-    |
-    = note: expected reference `&[u8]`
-               found reference `&core::result::Result<Vec<u8>, TryReserveError>`
-note: associated function defined here
-   --> /home/rdammak@actia.local/src/linux/rust/kernel/str.rs:112:18
-    |
-112 |     pub const fn from_bytes_with_nul(bytes: &[u8]) -> Result<&Self, CStrConvertError> {
-    |                  ^^^^^^^^^^^^^^^^^^^
 ```
