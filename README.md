@@ -285,17 +285,6 @@ impl kernel::Module for Scull {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
 impl Obd2Frame {
 
     fn new_request(
@@ -453,27 +442,107 @@ impl Obd2Frame {
 
 3. ADD 
 ```
-#[vtable]
-impl file::Operations for Scull {
-    // Existing code...
+use kernel::io_buffer::{IoBufferReader, IoBufferWriter};
+use kernel::{file, miscdev};
+use kernel::prelude::*;
+use kernel::sync::{smutex::Mutex, Arc, ArcBorrow};
+use kernel::str::CString;
+use alloc::vec::Vec;
+use kernel::str::CStr;
 
-    fn write(
-        data: ArcBorrow<'_, Device>,
+//use kernel::file::flags::O_WRONLY;
+
+
+module! {
+    type: Scull,
+    name: "scull_test",
+    license: "GPL",
+}
+
+struct Obd2Frame {
+    length: u8,
+    mode: u8,
+    pid: u8,
+    data: Vec<u8>,
+} 
+
+struct Scull {
+    _dev: Pin<Box<miscdev::Registration<Scull>>>,
+}
+
+struct Device {
+    obd2_frame: Obd2Frame,
+    contents: Mutex<Vec<u8>>,
+}
+
+// impl Device {
+
+//     fn new() -> Self {
+//         let mut vec = Vec::new();
+//         let _ = vec.try_push(0x11);
+//         let _ = vec.try_push(0x0D);
+//         let obd2_frame = Obd2Frame::new_request(
+//             2,
+//             1,
+//             0x1,
+//             vec,
+//         );
+//         Device {
+//             obd2_frame: obd2_frame,
+//             contents:Vec::new(),
+//         }
+//     }
+
+//     fn get_obd2_frame(&self) -> &Obd2Frame {
+//         &self.obd2_frame
+//     }
+
+// }
+
+
+
+
+#[vtable]
+
+impl file::Operations for Scull{
+    type OpenData = Arc<Device>;
+    type Data = Arc<Device>;
+
+    fn open(context: &Self::OpenData, _file: &file::File) -> Result<Self::Data> {
+        let obd2_frame = context.get_obd2_frame();
+        pr_info!("File for device {} was opened\n", obd2_frame.get_pid());
+        Ok(context.clone())
+    }
+
+    fn read(
+        _data: ArcBorrow<'_, Device>,
         _file: &file::File,
-        reader: &mut impl IoBufferReader,
+        _writer: &mut impl IoBufferWriter,
         _offset: u64,
     ) -> Result<usize> {
-        pr_info!("File for device {} was written\n", data.number);
-        let offset = offset.try_into()?;
-        let len = reader.len();
-        let new_len = len.checked_add(offset).ok_or(EINVAL)?;
-        let mut vec = data.contents.lock();
+        pr_info!("File was read\n");
+        Ok(0)
+    }
+
+    fn write(
+        _data: ArcBorrow<'_, Device>,
+        _file: &file::File,
+        _reader: &mut impl IoBufferReader,
+        _offset: u64,
+    ) -> Result<usize> {
+
+        pr_info!("File was written\n");
+
+        let _offset = _offset.try_into()?;
+        let len = _reader.len();
+        let new_len = len.checked_add(_offset).ok_or(EINVAL)?;
+        let mut vec = _data.contents.lock();
         if new_len > vec.len() {
             vec.try_resize(new_len, 0)?;
         }
 
         // Create the OBD2 frame
-        let obd2_frame = data.obd2_frame.clone();
+        let obd2_frame = _data.obd2_frame.clone();
 
         // Append OBD headers to the data
         vec.try_push(obd2_frame.length)?;
@@ -483,8 +552,196 @@ impl file::Operations for Scull {
         // Append data to the buffer
         vec.try_extend_from_slice(&obd2_frame.data)?;
 
-        Ok(len)
+        Ok(_reader.len())
+
     }
 }
 
+impl kernel::Module for Scull {
+    fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
+        pr_info!("Hello world!\n");
+        let dev = Arc::try_new(Device::new())?;
+        let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
+        Ok(Scull{ _dev: reg })
+    }
+}
+
+
+impl Obd2Frame {
+
+    fn new_request(
+        length: u8,
+        mode: u8,
+        pid: u8,
+        data: Vec<u8>,
+      
+    ) -> Self {
+
+        Obd2Frame {
+            length: length,
+            mode: mode,
+            pid: pid,
+            data: data,
+        }
+        
+    }
+
+   
+    
+
+    fn get_length(&self) -> u8 {
+        self.length
+    }
+
+    fn get_mode(&self) -> u8 {
+        self.mode
+    }
+
+    fn get_pid(&self) -> u8 {
+        self.pid
+    }
+
+    fn get_data(&self) -> &[u8] {
+        &self.data[..]
+    }
+
+
+    fn get_speed(&self) -> u16 {
+
+        let data = self.get_data();
+        if data.len() >= 1 {
+            (data[0] * 10) as u16
+        } else {
+            0
+        }
+
+    }
+
+
+    fn get_rpm(&self) -> u32 {
+        let data = self.get_data();
+        if data.len() >= 2 {
+            let a = data[0] as u16;
+            let b = data[1] as u16;
+            let rpm = (256 * a + b) as u32 / 4;
+            rpm
+        } else {
+            0
+        }
+    }
+
+   
+
+
+    fn get_fuel_system_status(&self) -> &str {
+        let data = self.get_data();
+        if data.len() >= 1 {
+            let status = data[0];
+            let status_str = match status {
+                0x10 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix",
+                0x11 => "Fuel System Status: Open loop, using fixed values for fuel mix",
+                0x12 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term fuel trim bank 1",
+                0x13 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term fuel trim bank 2",
+                0x14 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term fuel trim bank 1 and 2",
+                0x15 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from short term fuel trim bank 1",
+                0x16 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from short term fuel trim bank 2",
+                0x17 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term and short term fuel trim bank 1",
+                0x18 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term and short term fuel trim bank 2",
+                0x19 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term and short term fuel trim bank 1 and 2",
+                _ => "Invalid fuel system status",
+            };
+            status_str
+            
+        } else {
+            "Invalid fuel system status"
+        }
+    }
+
+
+
+  
+
+    fn get_data_dep_pid(&self) -> CString {
+        match self.get_pid() {
+            //Vehicle Speed
+            0x0D => {
+                let speed = self.get_speed();
+                CString::try_from_fmt(fmt!("Vehicle Speed: {}", speed)).unwrap()
+            }
+
+            //RPM
+            0x0C => {
+                let rpm: u16 = self.get_rpm().try_into().unwrap();
+                CString::try_from_fmt(fmt!("RPM: {}", rpm)).unwrap()
+            }
+
+            //Fuel System Status
+            0x01 => {
+                CString::try_from_fmt(fmt!("Fuel System Status: {}", self.get_fuel_system_status())).unwrap()
+            }
+
+            //invalid
+            _ => {
+                pr_info!("Invalid PID.");
+                CString::try_from_fmt(fmt!("Invalid PID")).unwrap()
+            }
+        }
+    }
+
+
+
+
+    fn serialize(&self) -> &CStr {
+
+        let binding: [u8; 3] = [self.length, self.mode, self.pid];
+        let a: &[u8] = binding.as_slice();
+        let b: &[u8] = self.data.as_slice();
+
+        let c: &[u8] = {
+
+            let mut v = Vec::try_with_capacity(a.len() + b.len()).unwrap();
+            v.try_extend_from_slice(a).unwrap();       
+            v.try_extend_from_slice(b).unwrap();       
+            Box::leak(v.try_into_boxed_slice().unwrap())
+        };
+
+        let serialized_frame = CStr::from_bytes_with_nul(c).unwrap();
+        serialized_frame
+    
+    }
+
+
+
+
+
+}
+
 ```
+4. Errors:
+error[E0599]: no method named `get_obd2_frame` found for reference `&Arc<Device>` in the current scope
+  --> samples/rust/rust_scull.rs:68:34
+   |
+68 |         let obd2_frame = context.get_obd2_frame();
+   |                                  ^^^^^^^^^^^^^^ method not found in `&Arc<Device>`
+
+error[E0599]: no method named `clone` found for struct `Obd2Frame` in the current scope
+   --> samples/rust/rust_scull.rs:101:43
+    |
+18  | struct Obd2Frame {
+    | ---------------- method `clone` not found for this struct
+...
+101 |         let obd2_frame = _data.obd2_frame.clone();
+    |                                           ^^^^^ method not found in `Obd2Frame`
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `clone`, perhaps you need to implement it:
+            candidate #1: `Clone`
+
+error[E0599]: no function or associated item named `new` found for struct `Device` in the current scope
+   --> samples/rust/rust_scull.rs:119:40
+    |
+29  | struct Device {
+    | ------------- function or associated item `new` not found for this struct
+...
+119 |         let dev = Arc::try_new(Device::new())?;
+    |                                        ^^^ function or associated item not found in `Device`
