@@ -450,4 +450,41 @@ impl Obd2Frame {
 }
 
 ```
+
+3. ADD 
+```
+#[vtable]
+impl file::Operations for Scull {
+    // Existing code...
+
+    fn write(
+        data: ArcBorrow<'_, Device>,
+        _file: &file::File,
+        reader: &mut impl IoBufferReader,
+        _offset: u64,
+    ) -> Result<usize> {
+        pr_info!("File for device {} was written\n", data.number);
+        let offset = offset.try_into()?;
+        let len = reader.len();
+        let new_len = len.checked_add(offset).ok_or(EINVAL)?;
+        let mut vec = data.contents.lock();
+        if new_len > vec.len() {
+            vec.try_resize(new_len, 0)?;
+        }
+
+        // Create the OBD2 frame
+        let obd2_frame = data.obd2_frame.clone();
+
+        // Append OBD headers to the data
+        vec.try_push(obd2_frame.length)?;
+        vec.try_push(obd2_frame.mode)?;
+        vec.try_push(obd2_frame.pid)?;
+
+        // Append data to the buffer
+        vec.try_extend_from_slice(&obd2_frame.data)?;
+
+        Ok(len)
+    }
+}
+
 ```
