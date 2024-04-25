@@ -442,6 +442,9 @@ impl Obd2Frame {
 
 3. ADD 
 ```
+
+use core::clone::Clone;
+
 use kernel::io_buffer::{IoBufferReader, IoBufferWriter};
 use kernel::{file, miscdev};
 use kernel::prelude::*;
@@ -459,6 +462,7 @@ module! {
     license: "GPL",
 }
 
+#[derive(Clone)]
 struct Obd2Frame {
     length: u8,
     mode: u8,
@@ -475,29 +479,29 @@ struct Device {
     contents: Mutex<Vec<u8>>,
 }
 
-// impl Device {
+impl Device {
 
-//     fn new() -> Self {
-//         let mut vec = Vec::new();
-//         let _ = vec.try_push(0x11);
-//         let _ = vec.try_push(0x0D);
-//         let obd2_frame = Obd2Frame::new_request(
-//             2,
-//             1,
-//             0x1,
-//             vec,
-//         );
-//         Device {
-//             obd2_frame: obd2_frame,
-//             contents:Vec::new(),
-//         }
-//     }
+    fn new(obd2_frame: Obd2Frame) -> Self {
+        // let mut vec = Vec::new();
+        // let _ = vec.try_push(0x11);
+        // let _ = vec.try_push(0x0D);
+        // let obd2_frame = Obd2Frame::new_request(
+        //     2,
+        //     1,
+        //     0x1,
+        //     vec,
+        // );
+        Device {
+            obd2_frame: obd2_frame,
+            contents: Mutex::new(Vec::new()),
+        }
+    }
 
-//     fn get_obd2_frame(&self) -> &Obd2Frame {
-//         &self.obd2_frame
-//     }
+    fn get_obd2_frame(&self) -> &Obd2Frame {
+        &self.obd2_frame
+    }
 
-// }
+}
 
 
 
@@ -509,7 +513,7 @@ impl file::Operations for Scull{
     type Data = Arc<Device>;
 
     fn open(context: &Self::OpenData, _file: &file::File) -> Result<Self::Data> {
-        let obd2_frame = context.get_obd2_frame();
+        let obd2_frame = context.as_ref().get_obd2_frame();
         pr_info!("File for device {} was opened\n", obd2_frame.get_pid());
         Ok(context.clone())
     }
@@ -560,7 +564,7 @@ impl file::Operations for Scull{
 impl kernel::Module for Scull {
     fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
         pr_info!("Hello world!\n");
-        let dev = Arc::try_new(Device::new())?;
+        let dev = Arc::try_new(Device::new(Obd2Frame::new_request(2, 1, 0x1, Vec::new())))?;
         let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
         Ok(Scull{ _dev: reg })
     }
@@ -688,9 +692,6 @@ impl Obd2Frame {
         }
     }
 
-
-
-
     fn serialize(&self) -> &CStr {
 
         let binding: [u8; 3] = [self.length, self.mode, self.pid];
@@ -709,39 +710,24 @@ impl Obd2Frame {
         serialized_frame
     
     }
-
-
-
-
-
 }
+
 
 ```
 4. Errors:
-error[E0599]: no method named `get_obd2_frame` found for reference `&Arc<Device>` in the current scope
-  --> samples/rust/rust_scull.rs:68:34
+```
+error[E0277]: the trait bound `Vec<u8>: Clone` is not satisfied
+  --> samples/rust/rust_scull.rs:25:5
    |
-68 |         let obd2_frame = context.get_obd2_frame();
-   |                                  ^^^^^^^^^^^^^^ method not found in `&Arc<Device>`
-
-error[E0599]: no method named `clone` found for struct `Obd2Frame` in the current scope
-   --> samples/rust/rust_scull.rs:101:43
-    |
-18  | struct Obd2Frame {
-    | ---------------- method `clone` not found for this struct
+20 | #[derive(Clone)]
+   |          ----- in this derive macro expansion
 ...
-101 |         let obd2_frame = _data.obd2_frame.clone();
-    |                                           ^^^^^ method not found in `Obd2Frame`
-    |
-    = help: items from traits can only be used if the trait is implemented and in scope
-    = note: the following trait defines an item `clone`, perhaps you need to implement it:
-            candidate #1: `Clone`
+25 |     data: Vec<u8>,
+   |     ^^^^^^^^^^^^^ the trait `Clone` is not implemented for `Vec<u8>`
+   |
+   = note: this error originates in the derive macro `Clone` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no function or associated item named `new` found for struct `Device` in the current scope
-   --> samples/rust/rust_scull.rs:119:40
-    |
-29  | struct Device {
-    | ------------- function or associated item `new` not found for this struct
-...
-119 |         let dev = Arc::try_new(Device::new())?;
-    |                                        ^^^ function or associated item not found in `Device`
+
+
+```
+
