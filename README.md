@@ -1,7 +1,7 @@
 # Testing
 
-
 1. RUST
+   
 ```
 #[repr(C)]
 
@@ -161,6 +161,7 @@ fn main() {
     println!("Serialized Data:{}\n",data_serialized);
 
 }
+
 ```
 
 2. RUST IN KERNEL ENVIRONNEMENT
@@ -172,12 +173,9 @@ use kernel::{file, miscdev};
 use kernel::prelude::*;
 use kernel::sync::{smutex::Mutex, Arc, ArcBorrow};
 use kernel::str::CString;
-use alloc::vec::Vec;
 use kernel::str::CStr;
+use alloc::vec::Vec;
 use core::clone::Clone;
-
-//use kernel::file::flags::O_WRONLY;
-
 
 module! {
     type: Scull,
@@ -185,25 +183,12 @@ module! {
     license: "GPL",
 }
 
-//#[derive(Clone)]
 struct Obd2Frame {
     length: u8,
     mode: u8,
     pid: u8,
     data: Vec<u8>,
 } 
-
-// impl Clone for Obd2Frame {
-//     fn clone(&self) -> Self {
-//         Obd2Frame {
-//             length: self.length,
-//             mode: self.mode,
-//             pid: self.pid,
-//             data: self.data.clone(),
-//         }
-//     }
-// }
-
 
 struct Scull {
     _dev: Pin<Box<miscdev::Registration<Scull>>>,
@@ -230,19 +215,19 @@ impl Device {
 
 }
 
-
-
-
 #[vtable]
 
 impl file::Operations for Scull{
+
     type OpenData = Arc<Device>;
     type Data = Arc<Device>;
 
     fn open(context: &Self::OpenData, _file: &file::File) -> Result<Self::Data> {
+
         let obd2_frame = context.as_ref().get_obd2_frame();
         pr_info!("File for device {} was opened\n", obd2_frame.get_pid());
         Ok(context.clone())
+        
     }
 
     fn read(
@@ -251,8 +236,10 @@ impl file::Operations for Scull{
         _writer: &mut impl IoBufferWriter,
         _offset: u64,
     ) -> Result<usize> {
+
         pr_info!("File was read\n");
         Ok(0)
+        
     }
 
     fn write(
@@ -268,6 +255,7 @@ impl file::Operations for Scull{
         let len = _reader.len();
         let new_len = len.checked_add(_offset).ok_or(EINVAL)?;
         let mut vec = _data.contents.lock();
+
         if new_len > vec.len() {
             vec.try_resize(new_len, 0)?;
         }
@@ -289,85 +277,71 @@ impl file::Operations for Scull{
 }
 
 impl kernel::Module for Scull {
+
     fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
+
         pr_info!("Hello world!\n");
         let dev = Arc::try_new(Device::new(Obd2Frame::new_request(2, 1, 0x1, Vec::new())))?;
         let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
         Ok(Scull{ _dev: reg })
-    }
-}
 
+    }
+
+}
 
 impl Obd2Frame {
 
-    fn new_request(
-        length: u8,
-        mode: u8,
-        pid: u8,
-        data: Vec<u8>,
-      
-    ) -> Self {
+    fn new_request(length: u8, mode: u8, pid: u8, data: Vec<u8>) -> Self {
 
         Obd2Frame {
-            length: length,
-            mode: mode,
-            pid: pid,
-            data: data,
+            length,
+            mode,
+            pid,
+            data,
         }
         
     }
 
-   
-    
+    fn get_length(&self) -> u8 { self.length }
 
-    fn get_length(&self) -> u8 {
-        self.length
-    }
+    fn get_mode(&self) -> u8 { self.mode }
 
-    fn get_mode(&self) -> u8 {
-        self.mode
-    }
+    fn get_pid(&self) -> u8 { self.pid }
 
-    fn get_pid(&self) -> u8 {
-        self.pid
-    }
-
-    fn get_data(&self) -> &[u8] {
-        &self.data[..]
-    }
-
+    fn get_data(&self) -> &[u8] { &self.data[..] }
 
     fn get_speed(&self) -> u16 {
 
         let data = self.get_data();
-        if data.len() >= 1 {
-            (data[0] * 10) as u16
-        } else {
-            0
-        }
+        if data.len() >= 1 { (data[0] * 10) as u16 } 
+        else { 0 }
 
     }
 
-
     fn get_rpm(&self) -> u32 {
+
         let data = self.get_data();
+
         if data.len() >= 2 {
+
             let a = data[0] as u16;
             let b = data[1] as u16;
             let rpm = (256 * a + b) as u32 / 4;
             rpm
-        } else {
-            0
-        }
+
+        } 
+        else { 0 }
+
     }
 
-   
-
-
     fn get_fuel_system_status(&self) -> &str {
+
         let data = self.get_data();
+
         if data.len() >= 1 {
+
             let status = data[0];
+
             let status_str = match status {
                 0x10 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix",
                 0x11 => "Fuel System Status: Open loop, using fixed values for fuel mix",
@@ -381,15 +355,18 @@ impl Obd2Frame {
                 0x19 => "Fuel System Status: Closed loop, using oxygen sensor feedback for fuel mix, with valid data from long term and short term fuel trim bank 1 and 2",
                 _ => "Invalid fuel system status",
             };
+
             status_str
             
-        } else {
-            "Invalid fuel system status"
-        }
+        } 
+        else { "Invalid fuel system status" }
+
     }
 
     fn get_data_dep_pid(&self) -> CString {
+
         match self.get_pid() {
+
             //Vehicle Speed
             0x0D => {
                 let speed = self.get_speed();
@@ -412,7 +389,9 @@ impl Obd2Frame {
                 pr_info!("Invalid PID.");
                 CString::try_from_fmt(fmt!("Invalid PID")).unwrap()
             }
+            
         }
+
     }
 
     fn serialize(&self) -> &CStr {
@@ -427,6 +406,7 @@ impl Obd2Frame {
             v.try_extend_from_slice(a).unwrap();       
             v.try_extend_from_slice(b).unwrap();       
             Box::leak(v.try_into_boxed_slice().unwrap())
+
         };
 
         let serialized_frame = CStr::from_bytes_with_nul(c).unwrap();
