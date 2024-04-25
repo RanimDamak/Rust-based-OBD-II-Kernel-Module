@@ -168,14 +168,17 @@ fn main() {
    
 ```
 
+//! This crate provides implementations for handling input/output buffers, file operations,
+//! synchronization primitives, and string types in the kernel context.
+
 use kernel::{
-    io_buffer::{IoBufferReader, IoBufferWriter},
-    {file, miscdev},
-    prelude::*,
-    sync::{smutex::Mutex, Arc, ArcBorrow},
-    str::{CString,CStr},
-    file::{flags, File, Operations},
-    Module,
+    io_buffer::{IoBufferReader, IoBufferWriter}, //readers and writers for input/output buffers
+    {file, miscdev}, //modules related to handling files and miscellaneous devices
+    prelude::*, //module that brings common traits and types into scope
+    sync::{smutex::Mutex, Arc, ArcBorrow}, //synchronization primitives like mutex and atomic reference counting
+    str::{CString,CStr}, //string types for handling C-style strings
+    file::{flags, File, Operations}, //modules and types for file operations
+    Module, //type representing a kernel module
 };
 use alloc::vec::Vec;
 use core::clone::Clone;
