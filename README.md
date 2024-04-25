@@ -716,18 +716,16 @@ impl Obd2Frame {
 ```
 4. Errors:
 ```
-error[E0277]: the trait bound `Vec<u8>: Clone` is not satisfied
-  --> samples/rust/rust_scull.rs:25:5
-   |
-20 | #[derive(Clone)]
-   |          ----- in this derive macro expansion
-...
-25 |     data: Vec<u8>,
-   |     ^^^^^^^^^^^^^ the trait `Clone` is not implemented for `Vec<u8>`
-   |
-   = note: this error originates in the derive macro `Clone` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-
+impl Clone for Obd2Frame {
+    fn clone(&self) -> Self {
+        Obd2Frame {
+            length: self.length,
+            mode: self.mode,
+            pid: self.pid,
+            data: self.data.clone(),
+        }
+    }
+}
 
 ```
 
