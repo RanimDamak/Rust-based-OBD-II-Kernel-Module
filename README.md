@@ -275,7 +275,12 @@ impl file::Operations for Scull{
         }
 
         // Create the OBD2 frame
-        let obd2_frame = &_data.obd2_frame;
+        let obd2_frame = Obd2Frame{
+            length: 0x03,
+            mode: 0x01,
+            pid: 0x0D,
+            data: Vec::new(),
+        };
 
         // Append OBD headers to the data
         vec.try_push(obd2_frame.length)?;
