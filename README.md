@@ -244,7 +244,15 @@ impl file::Operations for Scull{
     ) -> Result<usize> {
 
         pr_info!("File was read\n");
-        Ok(0)
+
+        let _offset = _offset.try_into()?;
+        let vec = _data.contents.lock();
+
+        let len = core::cmp::min(_writer.len(), vec.len().saturating_sub(_offset));
+        pr_info!("-------------------\n");
+        _writer.write_slice(&vec[_offset..][..len])?;
+
+        Ok(len)
         
     }
 
