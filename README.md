@@ -299,7 +299,7 @@ impl kernel::Module for Scull {
         pr_info!("starting device!\n");
         pr_info!("watching for changes...\n");
         pr_info!("-----------------------\n");
-        let dev = Arc::try_new(Device::new(Obd2Frame::new_request(2, 1, 0x1, Vec::new())))?;
+        let dev = Arc::try_new(Device{ contents: Mutex::new(Vec::new())})?;
         let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
         Ok(Scull{ _dev: reg })
 
@@ -433,6 +433,5 @@ impl Obd2Frame {
     }
 
 }
-
 
 ```
