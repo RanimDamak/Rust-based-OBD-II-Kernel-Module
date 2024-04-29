@@ -186,6 +186,27 @@ module! {
     type: Scull,
     name: "scull_test",
     license: "GPL",
+    params: {
+
+        req_resp: i8 {
+            default: 0,
+            permissions: 0o000,
+            description: "Resquest(0) or Response(1)",
+        },
+
+        _mode: u8 {
+            default: 1,
+            permissions: 0o000,
+            description: "10 modes for resquest(0.) & 10 modes for Response(4.)",
+        },
+
+        _pid: u8 {
+            default: 13,
+            permissions: 0o000,
+            description: "Vehicule Speed(0x0D) or RPM(0x0C) or Fuel System Status (0x01)",
+        },
+
+    },
 }
 
 struct Obd2Frame {
@@ -223,7 +244,7 @@ impl file::Operations for Scull{
 
     fn open(context: &Self::OpenData, _file: &file::File) -> Result<Self::Data> {
 
-        pr_info!("File for device was opened\n");
+        pr_info!("File was opened\n");
         if _file.flags() & flags::O_ACCMODE == flags::O_WRONLY {
             context.contents.lock().clear();
         }
@@ -244,8 +265,9 @@ impl file::Operations for Scull{
         let vec = _data.contents.lock();
 
         let len = core::cmp::min(_writer.len(), vec.len().saturating_sub(_offset));
-        pr_info!("-------------------\n");
+        pr_info!("---------------------\n");
         _writer.write_slice(&vec[_offset..][..len])?;
+
 
         Ok(len)
         
@@ -258,8 +280,6 @@ impl file::Operations for Scull{
         _offset: u64,
     ) -> Result<usize> {
 
-        pr_info!("File was written\n");
-
         let _offset = _offset.try_into()?;
         let len = _reader.len();
         let new_len = len.checked_add(_offset).ok_or(EINVAL)?;
@@ -271,21 +291,26 @@ impl file::Operations for Scull{
 
         // Create the OBD2 frame
         let obd2_frame = Obd2Frame{
-            length: 0x03,
-            mode: 0x01,
-            pid: 0x0D,
-            data: Vec::new(),
+            length: 3, // 0x03
+            mode: 1, // 0x01
+            pid: 13, // 0x0D
+            data: Vec::from(_reader.read_all()?),
         };
 
         // Append OBD headers to the data
         vec.try_push(obd2_frame.length)?;
         vec.try_push(obd2_frame.mode)?;
         vec.try_push(obd2_frame.pid)?;
+        pr_info!("element: {}\n", &vec[0]);
 
         // Append data to the buffer
-        vec.try_extend_from_slice(&obd2_frame.data)?;
+        for elt in &obd2_frame.data {
+            vec.try_push(*elt)?;
+            pr_info!("element: {}\n", *elt);
+        }
+        
 
-        Ok(_reader.len())
+        Ok(len)
 
     }
 }
@@ -295,16 +320,33 @@ impl kernel::Module for Scull {
     fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
 
         pr_info!("Hello world!\n");
-        pr_info!("-----------------------\n");
+        pr_info!("-------------------------\n");
         pr_info!("starting device!\n");
-        pr_info!("watching for changes...\n");
-        pr_info!("-----------------------\n");
+        pr_info!("watching for changes.....\n");
+        pr_info!("-------------------------\n");
+
+        pr_info!("Rust scull module parameters sample (init)\n");
+
+        {
+            let lock = _module.kernel_param_lock();
+            pr_info!("Parameters:\n");
+            pr_info!("Resquest(0) or Response(1): {}\n", req_resp.read());
+            pr_info!("Mode: {}\n", _mode.read());
+            pr_info!("PID: {}\n", _pid.read());
+        }
+
         let dev = Arc::try_new(Device{ contents: Mutex::new(Vec::new())})?;
         let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
         Ok(Scull{ _dev: reg })
 
     }
 
+}
+
+impl Drop for Scull {
+    fn drop(&mut self) {
+        pr_info!("Rust Scull module parameters sample (exit)\n");
+    }
 }
 
 impl Obd2Frame {
