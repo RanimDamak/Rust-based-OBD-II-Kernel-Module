@@ -96,6 +96,31 @@ impl ObdFrame {
         }
     }
 
+   fn decode_supported_pids(response: u32) -> [bool; 32] {
+       let mut supp_pids = [false; 32];
+       for i in 0..32 {
+           let mask = 1 << (31 - i);
+           supp_pids[i] = (response & mask)!= 0;
+           //println!("{}",supp_pids[i])
+       }
+       supp_pids
+   }
+
+   fn supported_pids (response: u32) -> Vec<u32> {
+       let pids= [0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20];
+       let supported = decode_supported_pids(response);
+       let mut v = Vec::new();
+   
+       for i in 0..32 {
+           if supported[i]==true{
+               v.push(pids[i]); 
+               //println!("{}",pids[i])
+           }
+           
+       }
+       v 
+   }
+
     pub fn get_data_dep_pid(&self) -> String {
         match self.get_pid() {
             //Vehicle Speed
