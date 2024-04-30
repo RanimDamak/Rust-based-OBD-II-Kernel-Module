@@ -3,6 +3,7 @@
 1. RUST
    
 ```
+
 use std::convert::TryInto;
 #[repr(C)]
 
@@ -134,7 +135,7 @@ fn vec_to_u32(vec: &[u8]) -> u32 {
 
             //Show PIDs supported
             0x00 => {
-                format!("Supported PIDs: {}",self.get_supported_pids())
+                format!("Supported PIDs: {:?}",self.get_supported_pids())
             }
 
             //Fuel System Status
@@ -187,10 +188,10 @@ fn vec_to_u32(vec: &[u8]) -> u32 {
 
 fn main() {
     let frame = ObdFrame::new_request(
-        2,
+        3,
         1,
-        0x0D,
-        vec![0x0D, 0x0D],
+        0x00,
+        vec![0x0D, 0x0D,0x0D, 0x0D],
     );
 
     let _length = frame.get_length();
@@ -204,6 +205,7 @@ fn main() {
     println!("Serialized Data:{}\n",data_serialized);
 
 }
+
 
 
 ```
