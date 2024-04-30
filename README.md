@@ -131,10 +131,16 @@ fn vec_to_u32(vec: &[u8]) -> u32 {
 
     pub fn get_data_dep_pid(&self) -> String {
         match self.get_pid() {
-            //Vehicle Speed
-            0x0D => {
-                let speed = self.get_speed();
-                format!("Vehicle Speed: {}", speed)
+
+            //Show PIDs supported
+            0x00 => {
+                format!("Supported PIDs: {}",self.get_supported_pids())
+            }
+
+            //Fuel System Status
+            0x01 => {
+                let fuel_system_status = self.get_fuel_system_status();
+                format!("Fuel System Status: {}", fuel_system_status)
             }
 
             //RPM
@@ -143,11 +149,15 @@ fn vec_to_u32(vec: &[u8]) -> u32 {
                 format!("RPM: {}", rpm)
             }
 
-            //Fuel System Status
-            0x01 => {
-                let fuel_system_status = self.get_fuel_system_status();
-                format!("Fuel System Status: {}", fuel_system_status)
+            //Vehicle Speed
+            0x0D => {
+                let speed = self.get_speed();
+                format!("Vehicle Speed: {}", speed)
             }
+
+            
+
+           
 
             //invalid
             _ => {
