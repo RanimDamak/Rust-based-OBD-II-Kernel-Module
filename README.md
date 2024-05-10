@@ -295,16 +295,13 @@ use kernel::{
     sync::{smutex::Mutex, Arc, ArcBorrow}, //synchronization primitives like mutex and atomic reference counting
     str::{CString,CStr}, //string types for handling C-style strings
     file::flags,
-    kasync::executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor},
-    kasync::net::{TcpListener, TcpStream},
-    net::{self, Ipv4Addr, SocketAddr, SocketAddrV4},
-    spawn_task,
-    kasync::timeout::Timeout,
-    ktime::Duration,
+    //kasync::executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor},
+    kasync::net::TcpStream,
+    //net::{self, Ipv4Addr, SocketAddr, SocketAddrV4},
+    //spawn_task,
 };
 use alloc::{str::from_utf8, vec::Vec};
 use core::clone::Clone;
-use scull::*;
 
 module! {
     type: Scull,
@@ -404,10 +401,11 @@ impl file::Operations for Scull{
         _offset: u64,
     ) -> Result<usize> {
 
-        let stream = TcpStream(sock);
-        let slice= &vec[_offset..][..8];
+        let stream = TcpStream::new(); //Create a new TcpStream
+        let slice= &[0 as u8; 8]; //8-byte slice 
         //let slice = b"Hello!";
         pr_info!("---------------------\n");
+        //write data to the stream
         stream.write(slice,true).unwrap();
         pr_info!("Client: OK sent!\n");
         let msg= b"Hello!";
@@ -1218,36 +1216,12 @@ impl Obd2Frame {
 
 4. Errors:
 ```
-error[E0425]: cannot find value `sock` in this scope
-   --> samples/rust/rust_scull.rs:117:32
+error[E0599]: no function or associated item named `new` found for struct `kernel::kasync::net::TcpStream` in the current scope
+   --> samples/rust/rust_scull.rs:117:33
     |
-117 |         let stream = TcpStream(sock);
-    |                                ^^^^ not found in this scope
+117 |         let stream = TcpStream::new(); //Create a new TcpStream
+    |                                 ^^^ function or associated item not found in `TcpStream`
 
-error[E0425]: cannot find value `vec` in this scope
-   --> samples/rust/rust_scull.rs:118:21
-    |
-118 |         let slice= &vec[_offset..][..8];
-    |                     ^^^ not found in this scope
-
-warning: unused import: `TcpListener`
-  --> samples/rust/rust_scull.rs:12:19
-   |
-12 |     kasync::net::{TcpListener, TcpStream},
-   |                   ^^^^^^^^^^^
-   |
-   = note: `#[warn(unused_imports)]` on by default
-
-error[E0423]: expected function, tuple struct or tuple variant, found struct `TcpStream`
-   --> samples/rust/rust_scull.rs:117:22
-    |
-117 |         let stream = TcpStream(sock);
-    |                      ^^^^^^^^^^^^^^^ help: use struct literal syntax instead: `TcpStream { stream: val }`
-    |
-   ::: /home/rdammak@actia.local/src/linux/rust/kernel/kasync/net.rs:77:1
-    |
-77  | pub struct TcpStream {
-    | -------------------- `TcpStream` defined here
-
+error: aborting due to previous error
 
 ```
