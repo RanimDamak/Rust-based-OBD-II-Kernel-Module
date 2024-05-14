@@ -227,10 +227,12 @@ use kernel::{
 };
 
 async fn echo_server(stream: TcpStream) -> Result {
-    let mut buf = [0u8; 10];
+    let mut buf = [0u8; 8];
     loop {
         let n = stream.read(&mut buf).await?;
-        pr_info!(":2X?",&buf);
+        pr_info!("echoserverread") ;
+        pr_info!("buffer is{:?}", buf) ; 
+        pr_info!("------------------------------------") ; 
         if n == 0 {
             pr_info!("Not getting anything!");
             return Ok(());
@@ -261,6 +263,11 @@ struct RustEchoServer {
 
 impl kernel::Module for RustEchoServer {
     fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
+
+        pr_info!("Hello from Server!\n");
+        pr_info!("-------------------------\n");
+        pr_info!("Starting!\n");
+        pr_info!("-------------------------\n");
         
         let handle = WqExecutor::try_new(kernel::workqueue::system())?;
         start_listener(handle.executor())?;
@@ -279,6 +286,7 @@ module! {
 }
 
 
+
 ```
 
 3. RUST scull
@@ -289,19 +297,86 @@ module! {
 //! synchronization primitives, and string types in the kernel context.
 
 use kernel::{
-    io_buffer::{IoBufferReader, IoBufferWriter}, //readers and writers for input/output buffers
-    {file, miscdev}, //modules related to handling files and miscellaneous devices
-    prelude::*, //module that brings common traits and types into scope
-    sync::{smutex::Mutex, Arc, ArcBorrow}, //synchronization primitives like mutex and atomic reference counting
-    str::{CString,CStr}, //string types for handling C-style strings
-    file::flags,
-    //kasync::executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor},
-    kasync::net::TcpStream,
-    //net::{self, Ipv4Addr, SocketAddr, SocketAddrV4},
-    //spawn_task,
+    io_buffer::{IoBufferReader, IoBufferWriter},//readers and writers for input/output buffers
+    {file, miscdev},                            //modules related to handling files and miscellaneous devices
+    prelude::*,                                 //module that brings common traits and types into scope
+    sync::{smutex::Mutex, Arc, ArcBorrow},      //synchronization primitives like mutex and atomic reference counting
+    str::{CString,CStr},                        //string types for handling C-style strings
+    file::{flags, Operations},
+    net::{TcpStream, Ipv4Addr, SocketAddr, SocketAddrV4, IpProtocol, SockType, AddressFamily, Socket },
+    
 };
 use alloc::{str::from_utf8, vec::Vec};
 use core::clone::Clone;
+
+
+/// Establishes a TCP connection to the specified address.
+///
+/// # Arguments
+/// * `address` - The address to connect to.
+///
+/// # Returns
+/// A `Result` containing a new `TcpStream` if the connection was successful, or an `Err` containing the error that occurred.
+
+pub fn connect(address: &SocketAddr) -> Result<TcpStream> {
+    // Create a new TCP socket.
+    let socket = Socket::new(AddressFamily::Inet, SockType::Stream, IpProtocol::Tcp)?;
+    
+    // Print debug information.
+    pr_info!("number1");
+    
+    // Connect the socket to the specified address.
+    socket.connect(address, 0)?; 
+    
+    // Print debug information.
+    pr_info!("number2") ;
+    
+    // Return a new TcpStream.
+    Ok(TcpStream {sock:unsafe{socket.as_inner()}})
+}
+
+// pub fn send_number(stream: &TcpStream, number: u32) -> Result<usize> {
+//     pr_info!("beginnings") ;
+//     let number_bytes = number.to_le_bytes();
+//     pr_info!("send number\n") ; 
+//     stream.write(&number_bytes, true) 
+// }
+
+
+/// Sends data over a TCP stream.
+///
+/// # Arguments
+/// * `stream` - The TCP stream to send data over.
+/// * `data` - The data to send as a vector of bytes.
+///
+/// # Returns
+/// A `Result` containing the number of bytes written if the data was sent successfully, or an `Err` containing the error that occurred.
+
+pub fn send_data(stream: &TcpStream, data: Vec<u8>) -> Result<usize> {
+    // Ensure the data vector has exactly 5 elements
+    let mut buffer = [0u8; 5];
+    for (i, &item) in data.iter().enumerate() {
+        if i >= 5 {
+            break; // Prevent index out of bounds
+        }
+        buffer[i] = item;
+    }
+    
+    // Write the data vector to the stream
+    stream.write(&buffer, true)
+
+    // Return the number of bytes written
+}
+
+/// A simple TCP client for testing purposes.
+///
+/// This struct represents a simple TCP client for testing purposes. It contains a single field,
+/// `stream`, which is a `TcpStream` struct representing the underlying TCP connection.
+
+pub struct RustClientTest {
+    stream: TcpStream,
+}
+
 
 module! {
     type: Scull,
@@ -401,15 +476,27 @@ impl file::Operations for Scull{
         _offset: u64,
     ) -> Result<usize> {
 
-        let stream = TcpStream::new(); //Create a new TcpStream
-        let slice= &[0 as u8; 8]; //8-byte slice 
-        //let slice = b"Hello!";
+        let remote_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::ANY, 8080)) ;
+        pr_info!("number3") ; 
+        let stream = connect(&remote_addr)?;
+        pr_info!("number4") ;
+        
+
+        let mut data : Vec<u8> = Vec::new() ; 
+        for _i in 0..5 {
+            let _ = data.try_push(1) ;
+        }
+
+        send_data(&stream, data)? ;
+
+        //let stream = TcpStream(sock);
+        let slice= &[0 as u8; 8];           //8-byte slice 
         pr_info!("---------------------\n");
         //write data to the stream
         stream.write(slice,true).unwrap();
         pr_info!("Client: OK sent!\n");
         let msg= b"Hello!";
-        let mut data=[0 as u8;6]; //6 byte buffer
+        let mut data=[0 as u8;6];           //6 byte buffer
         match stream.read(&mut data, true) {
             Ok(_) => {
                 if &data == msg {
@@ -465,10 +552,10 @@ impl kernel::Module for Scull {
 
     fn init(_name: &'static CStr, _module: &'static ThisModule) -> Result<Self> {
 
-        pr_info!("Hello world!\n");
+        pr_info!("Hello from Client!\n");
         pr_info!("-------------------------\n");
-        pr_info!("starting device!\n");
-        pr_info!("watching for changes.....\n");
+        pr_info!("Starting device!\n");
+        pr_info!("waiting for changes.....\n");
         pr_info!("-------------------------\n");
 
         pr_info!("Rust scull module parameters sample (init)\n");
@@ -483,6 +570,22 @@ impl kernel::Module for Scull {
 
         let dev = Arc::try_new(Device{ contents: Mutex::new(Vec::new())})?;
         let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
+
+        let remote_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::ANY, 8080)) ;
+        pr_info!("number3") ; 
+        let stream = connect(&remote_addr)?;
+        pr_info!("number4") ;
+        // // Example number to send
+        // let number_to_send = 42;
+        // send_number(&stream, number_to_send)? ; 
+
+        let mut data : Vec<u8> = Vec::new() ; 
+        for _i in 0..5 {
+            let _ = data.try_push(1) ;
+        }
+
+        send_data(&stream, data)? ; 
+
         Ok(Scull{ _dev: reg })
 
     }
@@ -1212,16 +1315,55 @@ impl Obd2Frame {
 
 }
 
+
 ```
 
-4. Errors:
+4. Qemu:
 ```
-error[E0599]: no function or associated item named `new` found for struct `kernel::kasync::net::TcpStream` in the current scope
-   --> samples/rust/rust_scull.rs:117:33
-    |
-117 |         let stream = TcpStream::new(); //Create a new TcpStream
-    |                                 ^^^ function or associated item not found in `TcpStream`
 
-error: aborting due to previous error
+~ # modinfo rust_scull
+filename:       /lib/modules/6.3.0+/kernel/samples/rust/rust_scull.ko
+license:        GPL
+parm:           req_resp:Resquest(0) or Response(1)
+parm:           _mode:10 modes for resquest(0.) & 10 modes for Response(4.)
+depends:        
+intree:         Y
+vermagic:       6.3.0+ SMP mod_unload 
+~ # modinfo rust_echo_server
+filename:       /lib/modules/6.3.0+/kernel/samples/rust/rust_echo_server.ko
+description:    Rust tcp echo sample
+license:        GPL v2
+depends:        
+intree:         Y
+vermagic:       6.3.0+ SMP mod_unload 
+~ # modprobe rust_echo_server
+[   30.103470] rust_echo_server: Hello from Server!
+[   30.103684] rust_echo_server: -------------------------
+[   30.103820] rust_echo_server: Starting!
+[   30.103923] rust_echo_server: -------------------------
+~ # modprobe rust_scull
+[   48.527973] scull_test: Hello from Client!
+[   48.528266] scull_test: -------------------------
+[   48.528814] scull_test: Starting device!
+[   48.528946] scull_test: waiting for changes.....
+[   48.529105] scull_test: -------------------------
+[   48.529231] scull_test: Rust scull module parameters sample (init)
+[   48.529521] scull_test: Parameters:
+[   48.529665] scull_test: Resquest(0) or Response(1): 0
+[   48.529890] scull_test: Mode: 1
+[   48.530962] scull_test: number3
+[   48.531246] scull_test: number1
+[   48.570017] scull_test: Hello from Client!
+[   48.570365] scull_test: -------------------------
+[   48.570514] scull_test: Starting device!
+[   48.570631] scull_test: waiting for changes.....
+[   48.570791] scull_test: -------------------------
+[   48.570947] scull_test: Rust scull module parameters sample (init)
+[   48.571152] scull_test: Parameters:
+[   48.571288] scull_test: Resquest(0) or Response(1): 0
+[   48.571473] scull_test: Mode: 1
+[   48.572241] scull_test: number3
+modprobe: 'kernel/samples/rust/rust_scull.ko': Network is unreachable
+
 
 ```
