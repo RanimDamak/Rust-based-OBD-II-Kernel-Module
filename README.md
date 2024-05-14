@@ -1364,6 +1364,8 @@ vermagic:       6.3.0+ SMP mod_unload
 [   48.571473] scull_test: Mode: 1
 [   48.572241] scull_test: number3
 modprobe: 'kernel/samples/rust/rust_scull.ko': Network is unreachable
+~ # qemu-system-x86_64: Slirp: Failed to send packet, ret: -1
+
 
 
 ```
