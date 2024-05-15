@@ -1366,6 +1366,9 @@ vermagic:       6.3.0+ SMP mod_unload
 modprobe: 'kernel/samples/rust/rust_scull.ko': Network is unreachable
 ~ # qemu-system-x86_64: Slirp: Failed to send packet, ret: -1
 
-
-
 ```
+
+qemu-system-x86_64 -netdev user,id=mynet0,hostfwd=tcp::8080-:8080 -device e1000,netdev=mynet0
+
+qemu-system-x86_64 -netdev user,id=mynet0,hostfwd=tcp::8080-:8080 -device e1000,netdev=mynet0 -hda <path_to_disk_image> -m 1024
+
