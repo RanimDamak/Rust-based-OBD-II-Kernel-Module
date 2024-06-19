@@ -1,7 +1,7 @@
 # Testing
 
 0. function
-
+```
 fn ascii_to_hex(ascii_code: u8) -> (u8, u8) {
     if ascii_code > 127 {
         return (0xFF, 0xFF); // Indicate an invalid ASCII code with a specific value
@@ -21,7 +21,7 @@ fn nibble_to_hex_char(nibble: u8) -> u8 {
     }
 }
 
-
+```
 
 
 
