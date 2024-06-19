@@ -1,6 +1,39 @@
 # Testing
 
-1. RUST
+0. function
+
+fn ascii_to_hex(ascii_code: u8) -> (u8, u8) {
+    if ascii_code > 127 {
+        return (0xFF, 0xFF); // Indicate an invalid ASCII code with a specific value
+    }
+
+    let high_nibble = (ascii_code >> 4) & 0x0F;
+    let low_nibble = ascii_code & 0x0F;
+
+    (high_nibble, low_nibble)
+}
+
+fn nibble_to_hex_char(nibble: u8) -> u8 {
+    match nibble {
+        0..=9 => b'0' + nibble,
+        10..=15 => b'A' + (nibble - 10),
+        _ => b'?', // Should never happen with a valid nibble
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+2. RUST
    
 ```
 
