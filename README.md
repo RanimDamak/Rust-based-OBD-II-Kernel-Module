@@ -248,38 +248,39 @@ fn main() {
 }
 
 ```
-**************************************************************************************************************************************************************************************************************************************************
+*************************************************************************************************************************************************************************************************************************************************
 
 
-2. Rust Echo Server
+2. Rust ECU Server
 ```
 
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust echo server sample.
+//! Rust server sample.
+
 
 use kernel::{
-    kasync::executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor},
-    kasync::net::{TcpListener, TcpStream},
+    kasync::{executor::{workqueue::Executor as WqExecutor, AutoStopHandle, Executor},
+    net::{TcpListener, TcpStream}},
     net::{self, Ipv4Addr, SocketAddr, SocketAddrV4},
-    prelude::*,
-    spawn_task,
-    sync::{Arc, ArcBorrow},
+    prelude::*, spawn_task,
+    sync::{Arc, ArcBorrow} 
 };
+
+use kernel::net::*;
 
 async fn echo_server(stream: TcpStream) -> Result {
     let mut buf = [0u8; 8];
-    loop {
+    
         let n = stream.read(&mut buf).await?;
-        pr_info!("echoserverread") ;
-        pr_info!("buffer is{:?}", buf) ; 
+        pr_info!("ECU server Read") ;
         pr_info!("------------------------------------") ; 
         if n == 0 {
             pr_info!("Not getting anything!");
             return Ok(());
         }
-        stream.write_all(&buf[..n]).await?;
-    }
+        
+    Ok(())
 }
 
 async fn accept_loop(listener: TcpListener, executor: Arc<impl Executor>) {
@@ -294,6 +295,7 @@ async fn accept_loop(listener: TcpListener, executor: Arc<impl Executor>) {
 fn start_listener(ex: ArcBorrow<'_, impl Executor + Send + Sync + 'static>) -> Result {
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::ANY, 8080));
     let listener = TcpListener::try_new(net::init_ns(), &addr)?;
+    pr_info!("The start_listener function has been invoked ...") ; 
     spawn_task!(ex, accept_loop(listener, ex.into()))?;
     Ok(())
 }
@@ -312,6 +314,7 @@ impl kernel::Module for RustEchoServer {
         
         let handle = WqExecutor::try_new(kernel::workqueue::system())?;
         start_listener(handle.executor())?;
+        pr_info!("Listened to Client"); 
         Ok(Self {
             _handle: handle.into(),
         })
@@ -320,23 +323,22 @@ impl kernel::Module for RustEchoServer {
 
 module! {
     type: RustEchoServer,
-    name: "rust_echo_server",
-    author: "Rust for Linux Contributors",
-    description: "Rust tcp echo sample",
+    name: "rust_ecu_server",
+    description: "Rust tcp sample",
     license: "GPL v2",
 }
+ 
 
 
 
 ```
 
-3. RUST scull
+3. RUST obd2
    
 ```
 
 //! This crate provides implementations for handling input/output buffers, file operations,
 //! synchronization primitives, and string types in the kernel context.
-
 use kernel::{
     io_buffer::{IoBufferReader, IoBufferWriter},//readers and writers for input/output buffers
     {file, miscdev},                            //modules related to handling files and miscellaneous devices
@@ -344,84 +346,14 @@ use kernel::{
     sync::{smutex::Mutex, Arc, ArcBorrow},      //synchronization primitives like mutex and atomic reference counting
     str::{CString,CStr},                        //string types for handling C-style strings
     file::{flags, Operations},
-    net::{TcpStream, Ipv4Addr, SocketAddr, SocketAddrV4, IpProtocol, SockType, AddressFamily, Socket },
-    
+    net::{TcpStream, Ipv4Addr, SocketAddr, SocketAddrV4, IpProtocol, SockType, AddressFamily, Socket },   
 };
 use alloc::{str::from_utf8, vec::Vec};
-use core::clone::Clone;
-
-
-/// Establishes a TCP connection to the specified address.
-///
-/// # Arguments
-/// * `address` - The address to connect to.
-///
-/// # Returns
-/// A `Result` containing a new `TcpStream` if the connection was successful, or an `Err` containing the error that occurred.
-
-pub fn connect(address: &SocketAddr) -> Result<TcpStream> {
-    // Create a new TCP socket.
-    let socket = Socket::new(AddressFamily::Inet, SockType::Stream, IpProtocol::Tcp)?;
-    
-    // Print debug information.
-    pr_info!("number1");
-    
-    // Connect the socket to the specified address.
-    socket.connect(address, 0)?; 
-    
-    // Print debug information.
-    pr_info!("number2") ;
-    
-    // Return a new TcpStream.
-    Ok(TcpStream {sock:unsafe{socket.as_inner()}})
-}
-
-// pub fn send_number(stream: &TcpStream, number: u32) -> Result<usize> {
-//     pr_info!("beginnings") ;
-//     let number_bytes = number.to_le_bytes();
-//     pr_info!("send number\n") ; 
-//     stream.write(&number_bytes, true) 
-// }
-
-
-/// Sends data over a TCP stream.
-///
-/// # Arguments
-/// * `stream` - The TCP stream to send data over.
-/// * `data` - The data to send as a vector of bytes.
-///
-/// # Returns
-/// A `Result` containing the number of bytes written if the data was sent successfully, or an `Err` containing the error that occurred.
-
-pub fn send_data(stream: &TcpStream, data: Vec<u8>) -> Result<usize> {
-    // Ensure the data vector has exactly 5 elements
-    let mut buffer = [0u8; 5];
-    for (i, &item) in data.iter().enumerate() {
-        if i >= 5 {
-            break; // Prevent index out of bounds
-        }
-        buffer[i] = item;
-    }
-    
-    // Write the data vector to the stream
-    stream.write(&buffer, true)
-
-    // Return the number of bytes written
-}
-
-/// A simple TCP client for testing purposes.
-///
-/// This struct represents a simple TCP client for testing purposes. It contains a single field,
-/// `stream`, which is a `TcpStream` struct representing the underlying TCP connection.
-
-pub struct RustClientTest {
-    stream: TcpStream,
-}
-
+use core::{clone::Clone, result::Result::Ok};
 
 module! {
     type: Scull,
-    name: "scull_test",
+    name: "rust_obd2",
     license: "GPL",
     params: {
 
@@ -436,12 +368,6 @@ module! {
             permissions: 0o000,
             description: "10 modes for resquest(0.) & 10 modes for Response(4.)",
         },
-
-        // _pid: u8 {
-        //     default: 13,
-        //     permissions: 0o000,
-        //     description: "Vehicule Speed(0x0D) or RPM(0x0C) or Fuel System Status (0x01)",
-        // },
 
     },
 }
@@ -470,6 +396,47 @@ impl Device {
         }
     }
 
+}
+
+/// Establishes a TCP connection to the specified address.
+/// # Argument: `address` - The address to connect to.
+/// # Returns: A `Result` containing a new `TcpStream` if the connection was successful, or an `Err` containing the error that occurred.
+
+pub fn connect(address: &SocketAddr) -> Result<TcpStream> {
+    let socket = Socket::new(AddressFamily::Inet, SockType::Stream, IpProtocol::Tcp)?;
+    pr_info!("New socket created");
+    socket.connect(address, 0)?; 
+    pr_info!("Socket connected to a remote address") ;
+    Ok(TcpStream {sock:unsafe{socket.as_inner()}})
+}
+
+/// Sends data over a TCP stream.
+/// # Arguments
+/// * `stream` - The TCP stream to send data over.
+/// * `data` - The data to send as a vector of bytes.
+/// # Returns: A `Result` containing the number of bytes written if the data was sent successfully, or an `Err` containing the error that occurred.
+
+pub fn send_data(stream: &TcpStream, data: Vec<u8>) -> Result<usize>  {
+    // Ensure the data vector has exactly 5 elements
+    let mut buffer = [0u8; 5];
+    for (i, &item) in data.iter().enumerate() {
+        if i >= 5 {
+            break; // Prevent index out of bounds
+        }
+        buffer[i] = item;
+        //pr_info!("send_data : buffer {} ",buffer[i]) ; 
+    }
+    
+    // Write the data vector to the stream
+    stream.write(&buffer, true)
+
+}
+
+/// A simple TCP client for testing purposes. This struct represents a simple TCP client for testing purposes. 
+/// It contains a single field, `stream`, which is a `TcpStream` struct representing the underlying TCP connection.
+
+pub struct RustClientTest {
+    stream: TcpStream,
 }
 
 #[vtable]
@@ -505,7 +472,6 @@ impl file::Operations for Scull{
         pr_info!("---------------------\n");
         _writer.write_slice(&vec[_offset..][..len])?;
 
-
         Ok(len)
         
     }
@@ -518,17 +484,13 @@ impl file::Operations for Scull{
     ) -> Result<usize> {
 
         let remote_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::ANY, 8080)) ;
-        pr_info!("number3") ; 
+        pr_info!("Remote Socket Address instance created") ; 
         let stream = connect(&remote_addr)?;
-        pr_info!("number4") ;
-        
+        pr_info!("Connection to the remote address established and returned a stream.") ;       
 
         let mut data : Vec<u8> = Vec::new() ; 
-        for _i in 0..5 {
-            let _ = data.try_push(1) ;
-        }
 
-        send_data(&stream, data)? ;
+        let _ =send_data(&stream, data) ;
 
         //let stream = TcpStream(sock);
         let slice= &[0 as u8; 8];           //8-byte slice 
@@ -537,7 +499,8 @@ impl file::Operations for Scull{
         stream.write(slice,true).unwrap();
         pr_info!("Client: OK sent!\n");
         let msg= b"Hello!";
-        let mut data=[0 as u8;6];           //6 byte buffer
+        let mut data=[1 as u8;6];           //6 byte buffer
+
         match stream.read(&mut data, true) {
             Ok(_) => {
                 if &data == msg {
@@ -551,7 +514,6 @@ impl file::Operations for Scull{
                 pr_info!("Failed to recieve data");
             }
         }
-
 
         let _offset = _offset.try_into()?;
         let len = _reader.len();
@@ -574,12 +536,11 @@ impl file::Operations for Scull{
         vec.try_push(obd2_frame.length)?;
         vec.try_push(obd2_frame.mode)?;
         vec.try_push(obd2_frame.pid)?;
-        pr_info!("element: {}\n", &vec[0]);
 
         // Append data to the buffer
         for elt in &obd2_frame.data {
             vec.try_push(*elt)?;
-            pr_info!("element: {}\n", *elt);
+            pr_info!("Data element: {}\n", *elt);
         }
         
         //obd2_frame.get_data_dep_pid();
@@ -598,34 +559,17 @@ impl kernel::Module for Scull {
         pr_info!("Starting device!\n");
         pr_info!("waiting for changes.....\n");
         pr_info!("-------------------------\n");
-
         pr_info!("Rust scull module parameters sample (init)\n");
-
         {
             let _lock = _module.kernel_param_lock();
             pr_info!("Parameters:\n");
             pr_info!("Resquest(0) or Response(1): {}\n", req_resp.read());
             pr_info!("Mode: {}\n", _mode.read());
-            //pr_info!("PID: {}\n", _pid.read());
+
         }
 
         let dev = Arc::try_new(Device{ contents: Mutex::new(Vec::new())})?;
-        let reg = miscdev::Registration::new_pinned(fmt!("scull_test"), dev)?;
-
-        let remote_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::ANY, 8080)) ;
-        pr_info!("number3") ; 
-        let stream = connect(&remote_addr)?;
-        pr_info!("number4") ;
-        // // Example number to send
-        // let number_to_send = 42;
-        // send_number(&stream, number_to_send)? ; 
-
-        let mut data : Vec<u8> = Vec::new() ; 
-        for _i in 0..5 {
-            let _ = data.try_push(1) ;
-        }
-
-        send_data(&stream, data)? ; 
+        let reg = miscdev::Registration::new_pinned(fmt!("obd2_client"), dev)?;
 
         Ok(Scull{ _dev: reg })
 
@@ -633,11 +577,11 @@ impl kernel::Module for Scull {
 
 }
 
-// impl Drop for Scull {
-//     fn drop(&mut self) {
-//         pr_info!("Rust Scull module parameters sample (exit)\n");
-//     }
-// }
+impl Drop for Scull {
+    fn drop(&mut self) {
+        pr_info!("Rust Scull module parameters sample (exit)\n");
+    }
+}
 
 impl Obd2Frame {
 
@@ -691,11 +635,7 @@ impl Obd2Frame {
             
     //     }
         
-
     // }
-
-   
-
 
     fn get_rpm(&self) -> u32 {
 
@@ -737,8 +677,6 @@ impl Obd2Frame {
         else { "Invalid fuel system status" }
 
     }
-
-    
 
     fn get_commanded2air_status(&self) -> &str {
 
@@ -1358,58 +1296,3 @@ impl Obd2Frame {
 
 
 ```
-
-4. Qemu:
-```
-
-~ # modinfo rust_scull
-filename:       /lib/modules/6.3.0+/kernel/samples/rust/rust_scull.ko
-license:        GPL
-parm:           req_resp:Resquest(0) or Response(1)
-parm:           _mode:10 modes for resquest(0.) & 10 modes for Response(4.)
-depends:        
-intree:         Y
-vermagic:       6.3.0+ SMP mod_unload 
-~ # modinfo rust_echo_server
-filename:       /lib/modules/6.3.0+/kernel/samples/rust/rust_echo_server.ko
-description:    Rust tcp echo sample
-license:        GPL v2
-depends:        
-intree:         Y
-vermagic:       6.3.0+ SMP mod_unload 
-~ # modprobe rust_echo_server
-[   30.103470] rust_echo_server: Hello from Server!
-[   30.103684] rust_echo_server: -------------------------
-[   30.103820] rust_echo_server: Starting!
-[   30.103923] rust_echo_server: -------------------------
-~ # modprobe rust_scull
-[   48.527973] scull_test: Hello from Client!
-[   48.528266] scull_test: -------------------------
-[   48.528814] scull_test: Starting device!
-[   48.528946] scull_test: waiting for changes.....
-[   48.529105] scull_test: -------------------------
-[   48.529231] scull_test: Rust scull module parameters sample (init)
-[   48.529521] scull_test: Parameters:
-[   48.529665] scull_test: Resquest(0) or Response(1): 0
-[   48.529890] scull_test: Mode: 1
-[   48.530962] scull_test: number3
-[   48.531246] scull_test: number1
-[   48.570017] scull_test: Hello from Client!
-[   48.570365] scull_test: -------------------------
-[   48.570514] scull_test: Starting device!
-[   48.570631] scull_test: waiting for changes.....
-[   48.570791] scull_test: -------------------------
-[   48.570947] scull_test: Rust scull module parameters sample (init)
-[   48.571152] scull_test: Parameters:
-[   48.571288] scull_test: Resquest(0) or Response(1): 0
-[   48.571473] scull_test: Mode: 1
-[   48.572241] scull_test: number3
-modprobe: 'kernel/samples/rust/rust_scull.ko': Network is unreachable
-~ # qemu-system-x86_64: Slirp: Failed to send packet, ret: -1
-
-```
-
-qemu-system-x86_64 -netdev user,id=mynet0,hostfwd=tcp::8080-:8080 -device e1000,netdev=mynet0
-
-qemu-system-x86_64 -netdev user,id=mynet0,hostfwd=tcp::8080-:8080 -device e1000,netdev=mynet0 -hda <path_to_disk_image> -m 1024
-
